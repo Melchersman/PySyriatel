@@ -22,7 +22,8 @@ async with SyriatelAPI(api_token="your_token") as api:
     numbers_codes = await api.get_numbers_codes()
     
     # Syriatel Cash
-    balance = await api.syrcash.balance("0991234567")
+    balance = await api.syrcash.balance("0991234567")  # By number
+    balance = await api.syrcash.balance(code="65288500")  # By secret code
     
     incoming = await api.syrcash.get_incoming_history(
         number="0991234567",
@@ -63,7 +64,7 @@ with SyriatelAPISync(api_token="your_token") as api:
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `balance(number)` | `int` | Balance in SYP |
+| `balance(number=None, code=None)` | `int` | Balance in SYP. Accepts either `number` or `code` parameter |
 | `get_incoming_history(number, code, page, start_at, end_at)` | `List[Transaction]` | Incoming transfers |
 | `get_outgoing_history(number, code, page, start_at, end_at)` | `List[Transaction]` | Outgoing transfers |
 | `find_incoming_transaction(transaction_no, number, code)` | `Transaction` | Find by transaction number |

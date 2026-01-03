@@ -23,17 +23,19 @@ class SyriatelCash:
         """Initialize the Cash namespace with API client"""
         self._api = api
     
-    async def balance(self, number: str) -> int:
+    async def balance(self, number: Optional[str] = None, code: Optional[str] = None) -> int:
         """
-        Get Syriatel Cash balance for a phone number
+        Get Syriatel Cash balance for a phone number or secret code
         
         Args:
-            number: Phone number in format 0XXXXXXXXX (will be normalized)
+            number: Phone number in format 0XXXXXXXXX (will be normalized, required if code not provided)
+            code: Secret code (required if number not provided)
             
         Returns:
             Balance as integer (in SYP)
             
         Raises:
+            ValueError: If neither number nor code is provided
             InvalidTokenError: If API token is invalid
             SubscriptionExpiredError: If subscription is expired
             FetchFailedError: If fetch from Syriatel failed
@@ -41,8 +43,14 @@ class SyriatelCash:
             ServerMaintenanceError: If servers are under maintenance
             NetworkError: If network request fails
         """
-        normalized = self._api._normalize_number(number)
-        data = await self._api._request("GET", "/Balance", params={"number": normalized})
+        if not number and not code:
+            raise ValueError("Either 'number' or 'code' must be provided")
+        params = {}
+        if number:
+            params["number"] = self._api._normalize_number(number)
+        elif code:
+            params["code"] = code
+        data = await self._api._request("GET", "/Balance", params=params)
         return int(data.get("balance", 0))
     
     async def get_incoming_history(
@@ -169,34 +177,25 @@ class SyriatelCash:
         max_pages: int = 10,
     ) -> Optional[Transaction]:
         """
-        Find an incoming transaction by transaction number
+        Find an incoming transaction by transaction number.
         
-        This method searches through multiple pages if needed to find the transaction.
-        
-        Args:
-            transaction_no: Transaction number to search for
-            number: Phone number (required if code not provided)
-            code: Secret code (required if number not provided)
-            max_pages: Maximum number of pages to search (default: 10)
-            
         Returns:
-            Transaction object if found, None otherwise
+            Transaction: If found.
+            None: If searched successfully but not found.
+        
+        Raises:
+            NetworkError, InvalidTokenError, etc.: Propagates errors from get_incoming_history
+            so the caller knows the search failed due to technical issues.
         """
         if not number and not code:
             raise ValueError("Either 'number' or 'code' must be provided")
-        
         for page in range(1, max_pages + 1):
             transactions = await self.get_incoming_history(number, code, page)
-            
-            # Search in current page
             tx = self.find_transaction_by_number(transactions, transaction_no)
             if tx:
                 return tx
-            
-            # If we got fewer transactions than expected, we've reached the end
             if len(transactions) == 0:
-                break
-        
+                return None
         return None
 
 
@@ -207,9 +206,9 @@ class SyriatelCashSync:
         self._async_cash = async_cash
         self._run_async = run_async_func
     
-    def balance(self, number: str) -> int:
+    def balance(self, number: Optional[str] = None, code: Optional[str] = None) -> int:
         """Get balance (sync)"""
-        return self._run_async(self._async_cash.balance(number))
+        return self._run_async(self._async_cash.balance(number, code))
     
     def get_incoming_history(
         self,
