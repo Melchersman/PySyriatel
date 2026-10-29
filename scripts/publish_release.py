@@ -26,7 +26,7 @@ try:
 except urllib.error.HTTPError as error:
     if error.code!=404:raise
     notes=Path('CHANGELOG.md').read_text().split('## '+version,1)[1].strip()
-    release=request(base+'/releases',{'tag_name':tag,'target_commitish':os.environ['GITHUB_SHA'],'name':'PySyriatel '+version,'body':notes+'\n\nDownload the wheel below to install this version. Full examples: https://api.melchersman.com/syr-cash/en/docs','draft':False,'prerelease':False})
+    release=request(base+'/releases',{'tag_name':tag,'target_commitish':os.environ['GITHUB_SHA'],'name':'PySyriatel '+version,'body':notes+'\n\nInstall from PyPI: `pip install --upgrade PySyriatel`. API reference: https://api.melchersman.com/syr-cash/en/docs','draft':False,'prerelease':False})
     artifacts=sorted(Path('dist').glob('*'))
     Path('dist/SHA256SUMS').write_text(''.join(hashlib.sha256(path.read_bytes()).hexdigest()+'  '+path.name+'\n' for path in artifacts))
     for path in sorted(Path('dist').glob('*')):
