@@ -2,6 +2,7 @@
 
 from .client import SyriatelAPI, SyriatelAPISync, SyriatelCash
 from .models import Transaction
+from .v2 import SyriatelV2,SyriatelV2Sync
 from .exceptions import (
     SyriatelAPIError,
     RateLimitError,
@@ -21,8 +22,10 @@ from .exceptions import (
     LoginFailedError,
 )
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 __all__ = [
+    "SyriatelV2",
+    "SyriatelV2Sync",
     "SyriatelAPI",
     "SyriatelAPISync",
     "SyriatelCash",
