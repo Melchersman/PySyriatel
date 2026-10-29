@@ -1,11 +1,16 @@
+# Changelog
+
+## 2.3.1
+
+- Use PyPI installation instructions in package release notes.
+- Keep release publication gated on a successful registry upload.
+
 ## 2.3.0
 
 - Add SyriatelV2 and SyriatelV2Sync for GSM/pay-code payment reads and Akrab Elik account management.
 - Support incoming date and transaction-ID filters, per-number PINs, subscriptions and separate renewal updates.
 - Keep the existing v1 clients and their signatures.
 - Publish checked releases on version changes and matching version tags.
-
-# Changelog
 
 ## 2.2.0
 
