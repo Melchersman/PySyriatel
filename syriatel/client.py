@@ -7,7 +7,7 @@ Supports both async and sync operations.
 import asyncio
 import aiohttp
 from datetime import datetime
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 from .exceptions import raise_error, NetworkError, SyriatelAPIError
 from .models import Transaction
 from urllib.parse import quote
@@ -16,251 +16,99 @@ from datetime import timezone
 
 
 class SyriatelCash:
-    """
-    Syriatel Cash API namespace
-    
-    Contains methods for interacting with Syriatel Cash services.
-    """
-    
+    """Compatibility calls using a phone number, pay code or query."""
+
     def __init__(self, api: "SyriatelAPI"):
-        """Initialize the Cash namespace with API client"""
         self._api = api
-    
-    async def balance(self, number: str) -> int:
-        """
-        Get Syriatel Cash balance for a phone number
-        
-        Args:
-            number: Phone number in format 0XXXXXXXXX (will be normalized)
-            
-        Returns:
-            Balance as integer (in SYP)
-            
-        Raises:
-            InvalidTokenError: If API token is invalid
-            SubscriptionExpiredError: If subscription is expired
-            FetchFailedError: If fetch from Syriatel failed
-            NotAuthorizedError: If account is not authorized
-            ServerMaintenanceError: If servers are under maintenance
-            NetworkError: If network request fails
-        """
-        normalized = self._api._normalize_number(number)
-        data = await self._api._request("GET", "/Balance", params={"number": normalized})
+
+    def _params(self, query=None, number=None, code=None):
+        if query is None and number is None and code is None:
+            raise ValueError("Provide query, number or code")
+        params = {}
+        if query is not None:
+            value = str(query).strip()
+            compact = value.replace(" ", "").replace("-", "")
+            if compact.startswith("+963") and len(compact) == 13 or compact.startswith("963") and len(compact) == 12:
+                value = self._api._normalize_number(compact)
+            params["query"] = value
+        if number is not None:
+            params["number"] = self._api._normalize_number(str(number))
+        if code is not None:
+            params["code"] = str(code)
+        return params
+
+    async def balance(self, query: Union[str, int, None] = None,
+                      number: Union[str, int, None] = None,
+                      code: Union[str, int, None] = None) -> int:
+        data = await self._api._request("GET", "/Balance", params=self._params(query, number, code))
         return int(data.get("balance", 0))
-    
-    async def get_incoming_history(
-        self,
-        number: Optional[str] = None,
-        code: Optional[str] = None,
-        page: int = 1,
-        start_at: Optional[str] = None,
-        end_at: Optional[str] = None,
-    ) -> List[Transaction]:
-        """
-        Get incoming transaction history for Syriatel Cash
-        
-        Args:
-            number: Phone number (required if code not provided, will be normalized)
-            code: Secret code (required if number not provided)
-            page: Page number for pagination (default: 1)
-            start_at: Filter transactions from this date (format: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS")
-            end_at: Filter transactions until this date (format: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS")
-            
-        Returns:
-            List[Transaction] - List of incoming transactions
-            
-        Raises:
-            ValueError: If neither number nor code is provided
-            InvalidTokenError: If API token is invalid
-            SubscriptionExpiredError: If subscription is expired
-            FetchFailedError: If fetch from Syriatel failed
-            NotAuthorizedError: If account is not authorized
-            NetworkError: If network request fails
-        """
-        if not number and not code:
-            raise ValueError("Either 'number' or 'code' must be provided")
-        
-        params = {"page": page}
-        if number:
-            params["number"] = self._api._normalize_number(number)
-        elif code:
-            params["code"] = code
-        
+
+    async def get_incoming_history(self, query: Union[str, int, None] = None,
+                                   number: Union[str, int, None] = None,
+                                   code: Union[str, int, None] = None, page: int = 1,
+                                   status: str = "success", start_at: Optional[str] = None,
+                                   end_at: Optional[str] = None) -> List[Transaction]:
+        params = {**self._params(query, number, code), "page": page, "status": status}
         data = await self._api._request("GET", "/IncomingHistory", params=params)
-        
-        # Return list of transactions directly
-        transactions = [
-            Transaction.from_dict(tx) for tx in data.get("transactions", [])
-        ]
-        
-        # Apply date filtering if provided
+        transactions = [Transaction.from_dict(tx) for tx in data.get("transactions", [])]
         return self._api._filter_transactions_by_date(transactions, start_at, end_at)
-    
-    async def get_outgoing_history(
-        self,
-        number: Optional[str] = None,
-        code: Optional[str] = None,
-        page: int = 1,
-        start_at: Optional[str] = None,
-        end_at: Optional[str] = None,
-    ) -> List[Transaction]:
-        """
-        Get outgoing transaction history for Syriatel Cash
-        
-        Args:
-            number: Phone number (required if code not provided, will be normalized)
-            code: Secret code (required if number not provided)
-            page: Page number for pagination (default: 1)
-            start_at: Filter transactions from this date (format: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS")
-            end_at: Filter transactions until this date (format: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS")
-            
-        Returns:
-            List[Transaction] - List of outgoing transactions
-            
-        Raises:
-            ValueError: If neither number nor code is provided
-            InvalidTokenError: If API token is invalid
-            SubscriptionExpiredError: If subscription is expired
-            FetchFailedError: If fetch from Syriatel failed
-            NotAuthorizedError: If account is not authorized
-            NetworkError: If network request fails
-        """
-        if not number and not code:
-            raise ValueError("Either 'number' or 'code' must be provided")
-        
-        params = {"page": page}
-        if number:
-            params["number"] = self._api._normalize_number(number)
-        elif code:
-            params["code"] = code
-        
+
+    async def get_outgoing_history(self, query: Union[str, int, None] = None,
+                                   number: Union[str, int, None] = None,
+                                   code: Union[str, int, None] = None, page: int = 1,
+                                   status: str = "success", start_at: Optional[str] = None,
+                                   end_at: Optional[str] = None) -> List[Transaction]:
+        params = {**self._params(query, number, code), "page": page, "status": status}
         data = await self._api._request("GET", "/OutgoingHistory", params=params)
-        
-        # Return list of transactions directly
-        transactions = [
-            Transaction.from_dict(tx) for tx in data.get("transactions", [])
-        ]
-        
-        # Apply date filtering if provided
+        transactions = [Transaction.from_dict(tx) for tx in data.get("transactions", [])]
         return self._api._filter_transactions_by_date(transactions, start_at, end_at)
-    
-    def find_transaction_by_number(
-        self,
-        transactions: List[Transaction],
-        transaction_no: str,
-    ) -> Optional[Transaction]:
-        """
-        Find a transaction by transaction number
-        
-        Args:
-            transactions: List of Transaction objects to search
-            transaction_no: Transaction number to search for
-            
-        Returns:
-            Transaction object if found, None otherwise
-        """
-        for tx in transactions:
-            if tx.transaction_no == transaction_no:
-                return tx
-        return None
-    
-    async def find_incoming_transaction(
-        self,
-        transaction_no: str,
-        number: Optional[str] = None,
-        code: Optional[str] = None,
-        max_pages: int = 10,
-    ) -> Optional[Transaction]:
-        """
-        Find an incoming transaction by transaction number
-        
-        This method searches through multiple pages if needed to find the transaction.
-        
-        Args:
-            transaction_no: Transaction number to search for
-            number: Phone number (required if code not provided)
-            code: Secret code (required if number not provided)
-            max_pages: Maximum number of pages to search (default: 10)
-            
-        Returns:
-            Transaction object if found, None otherwise
-        """
-        if not number and not code:
-            raise ValueError("Either 'number' or 'code' must be provided")
-        
+
+    def find_transaction_by_number(self, transactions: List[Transaction], transaction_no: str) -> Optional[Transaction]:
+        return next((tx for tx in transactions if tx.transaction_no == transaction_no), None)
+
+    async def find_incoming_transaction(self, transaction_no: str,
+                                        query: Union[str, int, None] = None,
+                                        number: Union[str, int, None] = None,
+                                        code: Union[str, int, None] = None,
+                                        max_pages: int = 10, status: str = "all") -> Optional[Transaction]:
+        self._params(query, number, code)
         for page in range(1, max_pages + 1):
-            transactions = await self.get_incoming_history(number, code, page)
-            
-            # Search in current page
-            tx = self.find_transaction_by_number(transactions, transaction_no)
-            if tx:
-                return tx
-            
-            # If we got fewer transactions than expected, we've reached the end
-            if len(transactions) == 0:
+            transactions = await self.get_incoming_history(query=query, number=number, code=code, page=page, status=status)
+            found = self.find_transaction_by_number(transactions, transaction_no)
+            if found is not None:
+                return found
+            if not transactions:
                 break
-        
         return None
 
 
 class SyriatelCashSync:
-    """Sync wrapper for SyriatelCash namespace"""
-    
+    """Synchronous compatibility calls with the same arguments as SyriatelCash."""
+
     def __init__(self, async_cash: SyriatelCash, run_async_func):
-        self._async_cash = async_cash
-        self._run_async = run_async_func
-    
-    def balance(self, number: str) -> int:
-        """Get balance (sync)"""
-        return self._run_async(self._async_cash.balance(number))
-    
-    def get_incoming_history(
-        self,
-        number: Optional[str] = None,
-        code: Optional[str] = None,
-        page: int = 1,
-        start_at: Optional[str] = None,
-        end_at: Optional[str] = None,
-    ) -> List[Transaction]:
-        """Get incoming history (sync)"""
-        return self._run_async(
-            self._async_cash.get_incoming_history(number, code, page, start_at, end_at)
-        )
-    
-    def get_outgoing_history(
-        self,
-        number: Optional[str] = None,
-        code: Optional[str] = None,
-        page: int = 1,
-        start_at: Optional[str] = None,
-        end_at: Optional[str] = None,
-    ) -> List[Transaction]:
-        """Get outgoing history (sync)"""
-        return self._run_async(
-            self._async_cash.get_outgoing_history(number, code, page, start_at, end_at)
-        )
-    
-    def find_transaction_by_number(
-        self,
-        transactions: List[Transaction],
-        transaction_no: str,
-    ) -> Optional[Transaction]:
-        """Find transaction by number (sync)"""
+        self._async_cash, self._run = async_cash, run_async_func
+
+    def balance(self, query: Union[str, int, None] = None, number: Union[str, int, None] = None,
+                code: Union[str, int, None] = None) -> int:
+        return self._run(self._async_cash.balance(query=query, number=number, code=code))
+
+    def get_incoming_history(self, query: Union[str, int, None] = None, number: Union[str, int, None] = None,
+                             code: Union[str, int, None] = None, page: int = 1, status: str = "success",
+                             start_at: Optional[str] = None, end_at: Optional[str] = None) -> List[Transaction]:
+        return self._run(self._async_cash.get_incoming_history(query=query, number=number, code=code, page=page, status=status, start_at=start_at, end_at=end_at))
+
+    def get_outgoing_history(self, query: Union[str, int, None] = None, number: Union[str, int, None] = None,
+                             code: Union[str, int, None] = None, page: int = 1, status: str = "success",
+                             start_at: Optional[str] = None, end_at: Optional[str] = None) -> List[Transaction]:
+        return self._run(self._async_cash.get_outgoing_history(query=query, number=number, code=code, page=page, status=status, start_at=start_at, end_at=end_at))
+
+    def find_transaction_by_number(self, transactions: List[Transaction], transaction_no: str) -> Optional[Transaction]:
         return self._async_cash.find_transaction_by_number(transactions, transaction_no)
-    
-    def find_incoming_transaction(
-        self,
-        transaction_no: str,
-        number: Optional[str] = None,
-        code: Optional[str] = None,
-        max_pages: int = 10,
-    ) -> Optional[Transaction]:
-        """Find incoming transaction (sync)"""
-        return self._run_async(
-            self._async_cash.find_incoming_transaction(
-                transaction_no, number, code, max_pages
-            )
-        )
+
+    def find_incoming_transaction(self, transaction_no: str, query: Union[str, int, None] = None,
+                                  number: Union[str, int, None] = None, code: Union[str, int, None] = None,
+                                  max_pages: int = 10, status: str = "all") -> Optional[Transaction]:
+        return self._run(self._async_cash.find_incoming_transaction(transaction_no, query=query, number=number, code=code, max_pages=max_pages, status=status))
 
 
 class SyriatelAPI:
@@ -404,6 +252,11 @@ class SyriatelAPI:
                 except (ValueError, aiohttp.ContentTypeError):
                     payload = None
                 retry = self._retry_after(response.headers.get("Retry-After", ""))
+                if not retry and isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+                    try:
+                        retry = max(0, int(payload["data"].get("retry_after") or 0))
+                    except (ValueError, TypeError):
+                        pass
                 if not isinstance(payload, dict):
                     if response.status == 429:
                         raise_error("RATE_LIMITED", retry_after=retry, status_code=429)

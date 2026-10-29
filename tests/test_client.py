@@ -33,7 +33,15 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(session.closed)
         for call in session.calls:self.assertEqual(call[1]['headers']['api-token'],'test-token')
         self.assertTrue(session.calls[0][0][1].endswith('/v1/accounts'))
-        self.assertEqual(session.calls[1][1]['params']['number'],'0912345678')
+        self.assertEqual(session.calls[1][1]['params']['query'],'0912345678')
+
+    async def test_published_legacy_keywords_and_status_remain_supported(self):
+        session=Session(success({'balance':100}),success({'transactions':[]}))
+        api=SyriatelAPI('test',session=session)
+        self.assertEqual(await api.syrcash.balance(code=12345678),100)
+        await api.syrcash.get_incoming_history(query='12345678',status='all',page=2)
+        self.assertEqual(session.calls[0][1]['params'],{'code':'12345678'})
+        self.assertEqual(session.calls[1][1]['params'],{'query':'12345678','status':'all','page':2})
 
     async def test_typed_errors_are_not_wrapped_as_network_errors(self):
         for code,exception,status in [('INVALID_TOKEN',InvalidTokenError,401),('API_MANAGEMENT_DISABLED',ManagementDisabledError,403),('INSUFFICIENT_BALANCE',InsufficientBalanceError,409)]:
