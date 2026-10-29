@@ -1,14 +1,13 @@
-"""
-Syriatel API Python Library
-
-A professional Python library for interacting with the Syriatel API.
-Supports both async and sync operations.
-"""
+"""Synchronous and asynchronous clients for the Syriatel Cash platform."""
 
 from .client import SyriatelAPI, SyriatelAPISync, SyriatelCash
 from .models import Transaction
 from .exceptions import (
     SyriatelAPIError,
+    RateLimitError,
+    ManagementDisabledError,
+    InsufficientBalanceError,
+    IdempotencyConflictError,
     InvalidTokenError,
     SubscriptionExpiredError,
     FetchFailedError,
@@ -22,13 +21,17 @@ from .exceptions import (
     LoginFailedError,
 )
 
-__version__ = "2.0.1"
+__version__ = "2.2.0"
 __all__ = [
     "SyriatelAPI",
     "SyriatelAPISync",
     "SyriatelCash",
     "Transaction",
     "SyriatelAPIError",
+    "RateLimitError",
+    "ManagementDisabledError",
+    "InsufficientBalanceError",
+    "IdempotencyConflictError",
     "InvalidTokenError",
     "SubscriptionExpiredError",
     "FetchFailedError",

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "PySyriatel"
-version = "2.0.1"
-description = "Python client for Syriatel API"
+version = "2.2.0"
+description = "Sync and async client for Syriatel Cash accounts, subscriptions and transactions"
 readme = "README.md"
 authors = [
     { name = "melchersman", email = "melchersman@gmail.com" },
@@ -34,7 +34,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/melchersman/PySyriatel"
-Documentation = "https://api.melchersman.com/syr-cash/api-docs"
+Documentation = "https://api.melchersman.com/syr-cash/en/docs"
 Repository = "https://github.com/melchersman/PySyriatel"
 Issues = "https://github.com/melchersman/PySyriatel/issues"
 
@@ -43,4 +43,3 @@ packages = ["syriatel"]
 
 [tool.setuptools.package-data]
 syriatel = ["py.typed"]
-
