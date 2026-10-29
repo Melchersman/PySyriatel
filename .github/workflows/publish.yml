@@ -1,0 +1,60 @@
+name: Publish PySyriatel
+on:
+  push:
+    branches: [master]
+    paths:
+      - syriatel/**
+      - tests/**
+      - scripts/publish_release.py
+      - pyproject.toml
+      - README.md
+      - CHANGELOG.md
+      - .github/workflows/publish.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: package-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        env:
+          SOURCE_REPO: ${{ github.repository }}
+          SOURCE_REV: ${{ github.sha }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${SOURCE_REPO}.git"
+          git fetch --depth=1 origin "$SOURCE_REV"
+          git checkout --detach FETCH_HEAD
+      - name: Install build tools
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --quiet --upgrade pip
+          .venv/bin/python -m pip install --quiet . build twine
+      - name: Test the client
+        run: .venv/bin/python -m unittest discover -s tests -v
+      - name: Build and validate distributions
+        run: |
+          .venv/bin/python -m build
+          .venv/bin/python -m twine check dist/*
+      - name: Publish GitHub release
+        env:
+          RELEASE_TOKEN: ${{ github.token }}
+        run: .venv/bin/python scripts/publish_release.py
+      - name: Publish to PyPI
+        id: pypi
+        continue-on-error: true
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN || secrets.PYPI_TOKEN || secrets.TWINE_PASSWORD }}
+          skip-existing: true
+          verbose: false
+      - name: Record publication result
+        env:
+          PYPI_RESULT: ${{ steps.pypi.outcome }}
+        run: |
+          printf 'PYPI_PUBLICATION=%s\n' "$PYPI_RESULT"
