@@ -2,24 +2,20 @@ name: Publish PySyriatel
 on:
   push:
     branches: [master]
-    paths:
-      - syriatel/**
-      - tests/**
-      - scripts/publish_release.py
-      - pyproject.toml
-      - README.md
-      - CHANGELOG.md
-      - .github/workflows/publish.yml
+    paths: [pyproject.toml]
+    tags: ['v*.*.*']
   workflow_dispatch:
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 concurrency:
   group: package-release
   cancel-in-progress: false
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Check out source
         env:
@@ -28,33 +24,48 @@ jobs:
         run: |
           git init .
           git remote add origin "https://github.com/${SOURCE_REPO}.git"
-          git fetch --depth=1 origin "$SOURCE_REV"
+          git fetch --depth=2 origin "$SOURCE_REV"
           git checkout --detach FETCH_HEAD
+      - name: Check release version
+        id: version
+        env:
+          REF: ${{ github.ref }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          python3 - <<'PY'
+          import os,re,subprocess,tomllib
+          from pathlib import Path
+          version=tomllib.loads(Path('pyproject.toml').read_text())['project']['version']
+          if not re.fullmatch(r'\d+\.\d+\.\d+',version):raise SystemExit('Invalid release version')
+          ref=os.environ['REF'];publish=True
+          if ref.startswith('refs/tags/') and ref!='refs/tags/v'+version:raise SystemExit('Tag and package version must match')
+          if os.environ['EVENT']=='push' and ref=='refs/heads/master':
+              subprocess.run(['git','fetch','--depth=1','origin',os.environ['BEFORE']],check=True)
+              old=subprocess.check_output(['git','show',os.environ['BEFORE']+':pyproject.toml'],text=True)
+              publish=tomllib.loads(old)['project']['version']!=version
+          with open(os.environ['GITHUB_OUTPUT'],'a') as file:file.write('publish='+str(publish).lower()+'\n')
+          PY
       - name: Install build tools
+        if: steps.version.outputs.publish == 'true'
         run: |
           python3 -m venv .venv
           .venv/bin/python -m pip install --quiet --upgrade pip
           .venv/bin/python -m pip install --quiet . build twine
-      - name: Test the client
-        run: .venv/bin/python -m unittest discover -s tests -v
-      - name: Build and validate distributions
+      - name: Test and build
+        if: steps.version.outputs.publish == 'true'
         run: |
+          .venv/bin/python -m unittest discover -s tests -v
           .venv/bin/python -m build
           .venv/bin/python -m twine check dist/*
-      - name: Publish GitHub release
+      - name: Publish to PyPI
+        if: steps.version.outputs.publish == 'true'
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
+      - name: Create release
+        if: steps.version.outputs.publish == 'true'
         env:
           RELEASE_TOKEN: ${{ github.token }}
         run: .venv/bin/python scripts/publish_release.py
-      - name: Publish to PyPI
-        id: pypi
-        continue-on-error: true
-        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN || secrets.PYPI_TOKEN || secrets.TWINE_PASSWORD }}
-          skip-existing: true
-          verbose: false
-      - name: Record publication result
-        env:
-          PYPI_RESULT: ${{ steps.pypi.outcome }}
-        run: |
-          printf 'PYPI_PUBLICATION=%s\n' "$PYPI_RESULT"
